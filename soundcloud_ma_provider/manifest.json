@@ -1,0 +1,11 @@
+{
+  "type": "music",
+  "domain": "soundcloud_free",
+  "name": "SoundCloud (no login)",
+  "description": "Search and stream SoundCloud tracks without credentials via nuvem_de_som.",
+  "codeowners": ["@TigreGotico"],
+  "stage": "beta",
+  "requirements": ["nuvem_de_som"],
+  "documentation": "https://github.com/TigreGotico/plugin-manager",
+  "multi_instance": false
+}
