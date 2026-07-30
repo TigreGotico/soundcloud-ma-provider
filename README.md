@@ -1,6 +1,6 @@
 # soundcloud-ma-provider
 
-[Music Assistant](https://music-assistant.io) provider for [SoundCloud](https://soundcloud.com) — search and stream tracks, browse artist profiles and playlists/sets, without a SoundCloud account, via [`nuvem_de_som`](https://github.com/TigreGotico/nuvem_de_som).
+This is a [Music Assistant](https://music-assistant.io) provider for [SoundCloud](https://soundcloud.com). It searches and streams tracks, and browses artist profiles and playlists or sets, without a SoundCloud account. It uses [`nuvem_de_som`](https://github.com/TigreGotico/nuvem_de_som) to talk to SoundCloud.
 
 | Provider domain | Content |
 |---|---|
@@ -47,7 +47,7 @@ mass-pm
 
 In Music Assistant: **Settings → Providers → SoundCloud (no login) → +**
 
-No configuration fields — click + and you're done.
+No configuration fields are required.
 
 ---
 
@@ -61,7 +61,7 @@ No configuration fields — click + and you're done.
 
 **Browse**: a "Trending" shortcut surfaces popular tracks from SoundCloud's public trending feed.
 
-**What is not available**: private tracks, tracks behind a SoundCloud Go+ paywall. Only publicly streamable tracks play. The stream format is AAC — delivered as HLS or plain HTTP depending on the track and SoundCloud's CDN routing.
+**What is not available**: private tracks, and tracks behind a SoundCloud Go+ paywall. Only publicly streamable tracks play. The stream format is AAC, delivered as HLS or plain HTTP depending on the track and on SoundCloud's CDN routing.
 
 ---
 
@@ -133,11 +133,11 @@ Item IDs are always full SoundCloud page URLs. `nuvem_de_som` accepts these dire
 
 ### `get_playlist()` stub behaviour
 
-`get_playlist()` returns a minimal `Playlist` object with the title derived from the URL slug (`sets/my-cool-mix` → `"My Cool Mix"`) rather than fetching the set page. This avoids an extra HTTP round-trip for the common case where MA only needs the playlist title for display. The full track listing is fetched in `get_playlist_tracks()`.
+`get_playlist()` returns a minimal `Playlist` object. It derives the title from the URL slug (`sets/my-cool-mix` becomes `"My Cool Mix"`) instead of fetching the set page. This avoids an extra HTTP round trip for the common case, where MA only needs the playlist title for display. `get_playlist_tracks()` fetches the full track listing.
 
 ### `get_track()` stub behaviour
 
-`get_track()` similarly returns a stub `Track` with the title derived from the URL slug. The real metadata (title, artwork, duration) would require an additional page fetch that is not worth the latency — MA calls `get_stream_details()` immediately after and the player does not need rich metadata to start playback.
+`get_track()` also returns a stub `Track`, with the title derived from the URL slug. The real metadata (title, artwork, duration) would need an extra page fetch, and that latency is not worth paying. MA calls `get_stream_details()` right after, and the player does not need rich metadata to start playback.
 
 ### Stream type detection
 
@@ -149,11 +149,11 @@ StreamDetails(
 )
 ```
 
-SoundCloud serves some tracks as plain HTTP AAC and others as HLS (`.m3u8`) playlists — the choice depends on the track's upload format and SoundCloud's CDN routing. MA's player handles both.
+SoundCloud serves some tracks as plain HTTP AAC and others as HLS (`.m3u8`) playlists. The choice depends on the track's upload format and on SoundCloud's CDN routing. MA's player handles both formats.
 
 ### Artist resolution fallback
 
-`get_artist()` calls `client.resolve_user(url)`. If the resolution fails (network error, unknown user), a stub `Artist` is returned with the name derived from the URL slug rather than raising. This makes stale library entries show a name rather than breaking.
+`get_artist()` calls `client.resolve_user(url)`. If the resolution fails (network error, unknown user), it returns a stub `Artist` with the name derived from the URL slug instead of raising an error. This lets a stale library entry show a name instead of breaking.
 
 ---
 
@@ -166,7 +166,7 @@ SoundCloud serves some tracks as plain HTTP AAC and others as HLS (`.m3u8`) play
 soundcloud_free = "soundcloud_ma_provider"
 ```
 
-`mass-pm` reads this entrypoint at startup via `music-assistant-plugin-manager` and injects the `soundcloud_free` domain into MA's provider registry before MA's own startup code runs. See [plugin-managers](https://github.com/TigreGotico/plugin-managers) for the full mechanism.
+`mass-pm` reads this entry point at startup, through `music-assistant-plugin-manager`, and injects the `soundcloud_free` domain into MA's provider registry before MA's own startup code runs. See [TigreGotico/plugin-managers](https://github.com/TigreGotico/plugin-managers) for the full mechanism.
 
 ### `nuvem_de_som` client lifecycle
 
@@ -176,7 +176,7 @@ async def handle_async_init(self) -> None:
     self._client = SoundCloudAPI()
 ```
 
-`SoundCloudAPI()` is instantiated once per provider instance and holds internal state across calls (e.g. the SoundCloud client ID extracted from the page). The import is deferred to `handle_async_init()` so a missing dependency raises `ProviderUnavailableError` cleanly rather than crashing at module import time.
+The provider creates one `SoundCloudAPI()` instance per provider instance. This instance holds internal state across calls, for example the SoundCloud client ID extracted from the page. The import happens inside `handle_async_init()`, so a missing dependency raises `ProviderUnavailableError` cleanly instead of crashing at module import time.
 
 ### All network calls run in a thread
 
@@ -190,7 +190,7 @@ items = await asyncio.to_thread(
 
 ### Data shape from `nuvem_de_som`
 
-`nuvem_de_som` returns plain Python dicts. The conversion helpers (`_to_track`, `_to_artist`, `_to_playlist`) extract fields by key with safe defaults:
+`nuvem_de_som` returns plain Python dicts. The conversion helpers (`_to_track`, `_to_artist`, `_to_playlist`) extract fields by key and fall back to safe defaults:
 
 ```python
 def _to_track(item: dict, domain: str, instance_id: str) -> Track:
@@ -257,7 +257,7 @@ print(url)   # direct stream URL (HTTP or HLS .m3u8)
 
 ### Adding rich playlist metadata
 
-Currently `get_playlist()` derives the title from the URL slug. To fetch the real title and artwork, add a `resolve_set()` call if `nuvem_de_som` exposes one:
+`get_playlist()` derives the title from the URL slug. To fetch the real title and artwork, add a `resolve_set()` call if `nuvem_de_som` exposes one:
 
 ```python
 async def get_playlist(self, prov_playlist_id: str) -> Playlist:
@@ -273,7 +273,7 @@ If `nuvem_de_som` does not have `resolve_set`, open a feature request on that re
 
 ### Adding more browse content
 
-The browse method currently surfaces one "Trending" folder. To add genre folders:
+The browse method surfaces one "Trending" folder. To add genre folders:
 
 ```python
 GENRES = ["electronic", "hip-hop", "ambient", "jazz"]
@@ -319,7 +319,7 @@ pip install -U nuvem_de_som
 
 ### HLS playback is choppy or fails
 
-Some MA audio backends have partial HLS support. MPV generally handles HLS well; simpler backends may not. If you see problems, check your MA audio backend configuration.
+Some MA audio backends have partial HLS support. MPV generally handles HLS well, but simpler backends may not. If you see problems, check your MA audio backend configuration.
 
 ### Provider not appearing in MA
 
