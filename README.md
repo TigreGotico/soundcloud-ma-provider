@@ -59,7 +59,7 @@ No configuration fields are required.
 
 **Playlists / Sets**: browse and play any public SoundCloud set.
 
-**Browse**: a "Trending" shortcut surfaces popular tracks from SoundCloud's public trending feed.
+**Browse**: a "Popular searches" shortcut runs a curated search for popular tracks. It is not SoundCloud's real trending feed — `nuvem_de_som` has no endpoint for that.
 
 **What is not available**: private tracks, and tracks behind a SoundCloud Go+ paywall. Only publicly streamable tracks play. The stream format is AAC, delivered as HLS or plain HTTP depending on the track and on SoundCloud's CDN routing.
 
@@ -106,7 +106,7 @@ The stream type is detected automatically: if the resolved URL contains `m3u8`, 
 |---|---|
 | `SEARCH` | Tracks, artists, playlists/sets |
 | `ARTIST_TOPTRACKS` | Artist's uploaded tracks |
-| `BROWSE` | Trending tracks shortcut |
+| `BROWSE` | "Popular searches" curated-search shortcut |
 
 ### Media type mapping
 
@@ -125,15 +125,15 @@ Item IDs are always full SoundCloud page URLs. `nuvem_de_som` accepts these dire
 | `search(query, media_types, limit)` | Searches SoundCloud for tracks, people, and/or sets |
 | `get_artist(prov_artist_id)` | Resolves user profile by URL; falls back to a name stub on failure |
 | `get_artist_toptracks(prov_artist_id)` | Returns the artist's uploaded tracks |
-| `get_playlist(prov_playlist_id)` | Returns a minimal playlist stub (title derived from URL slug) |
+| `get_playlist(prov_playlist_id)` | Returns a minimal playlist stub for set URLs (title derived from the slug); raises `MediaNotFoundError` otherwise |
 | `get_playlist_tracks(prov_playlist_id, page)` | Fetches set track listing via `client.get_tracks()` |
 | `get_track(prov_track_id)` | Returns a stub track (metadata resolved lazily at stream time) |
-| `browse(path)` | Returns a "Trending" folder at root; trending tracks one level deep |
+| `browse(path)` | Returns a "Popular searches" folder at root; curated-search tracks one level deep |
 | `get_stream_details(item_id, media_type)` | Resolves SoundCloud page URL to audio stream |
 
-### `get_playlist()` stub behaviour
+### `get_playlist()` behaviour
 
-`get_playlist()` returns a minimal `Playlist` object. It derives the title from the URL slug (`sets/my-cool-mix` becomes `"My Cool Mix"`) instead of fetching the set page. This avoids an extra HTTP round trip for the common case, where MA only needs the playlist title for display. `get_playlist_tracks()` fetches the full track listing.
+`nuvem_de_som` has no endpoint to resolve a set/playlist page, so `get_playlist()` cannot fetch a real title, artwork, or owner. For a URL that looks like a SoundCloud set (`.../sets/<slug>`), it returns a minimal `Playlist` with the title derived from the slug — consistent with the slug fallback `get_artist()` and `get_track()` already use — so a playlist surfaced by `search()` stays openable. For anything else, it raises `MediaNotFoundError`. `get_playlist_tracks()` fetches the full track listing directly and works independently of `get_playlist()`.
 
 ### `get_track()` stub behaviour
 
@@ -257,14 +257,15 @@ print(url)   # direct stream URL (HTTP or HLS .m3u8)
 
 ### Adding rich playlist metadata
 
-`get_playlist()` derives the title from the URL slug. To fetch the real title and artwork, add a `resolve_set()` call if `nuvem_de_som` exposes one:
+`get_playlist()` returns a slug-derived stub because `nuvem_de_som` has no endpoint to resolve a set page. To return real playlists, add a `resolve_set()` call once `nuvem_de_som` exposes one:
 
 ```python
 async def get_playlist(self, prov_playlist_id: str) -> Playlist:
     data = await asyncio.to_thread(self._client.resolve_set, prov_playlist_id)
     if data:
         return _to_playlist(data, self.domain, self.instance_id)
-    # fallback
+    if "/sets/" not in prov_playlist_id:
+        raise MediaNotFoundError(f"No playlist available for: {prov_playlist_id}")
     slug = prov_playlist_id.rstrip("/").split("/")[-1].replace("-", " ").title()
     return Playlist(item_id=prov_playlist_id, provider=self.domain, name=slug, ...)
 ```
@@ -273,7 +274,7 @@ If `nuvem_de_som` does not have `resolve_set`, open a feature request on that re
 
 ### Adding more browse content
 
-The browse method surfaces one "Trending" folder. To add genre folders:
+The browse method surfaces one "Popular searches" folder. To add genre folders:
 
 ```python
 GENRES = ["electronic", "hip-hop", "ambient", "jazz"]
@@ -288,8 +289,6 @@ async def browse(self, path):
     )
     return [_to_track(i, self.domain, self.instance_id) for i in items]
 ```
-
-Also add `ProviderFeature.BROWSE` to `SUPPORTED_FEATURES`.
 
 ---
 

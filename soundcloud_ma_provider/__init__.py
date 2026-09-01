@@ -40,6 +40,7 @@ if TYPE_CHECKING:
 SUPPORTED_FEATURES = {
     ProviderFeature.SEARCH,
     ProviderFeature.ARTIST_TOPTRACKS,
+    ProviderFeature.BROWSE,
 }
 
 
@@ -172,10 +173,12 @@ class SoundCloudProvider(MusicProvider):
         parts = [p for p in path.split("://")[1].split("/") if p] if "://" in path else []
         if not parts:
             return [
-                BrowseFolder(item_id="trending", provider=self.domain,
-                             path=f"{path}/trending", name="Trending"),
+                BrowseFolder(item_id="popular", provider=self.domain,
+                             path=f"{path}/popular", name="Popular searches"),
             ]
-        # "trending" folder — search the literal genre tag SoundCloud uses
+        # nuvem_de_som has no real trending-feed endpoint; this folder is a
+        # curated search for the literal string "trending soundcloud", not
+        # SoundCloud's actual trending chart.
         items = await asyncio.to_thread(
             lambda: list(self._client.search_tracks("trending soundcloud", limit=20))
         )
@@ -207,11 +210,19 @@ class SoundCloudProvider(MusicProvider):
         return [_to_track(i, self.domain, self.instance_id) for i in items]
 
     async def get_playlist(self, prov_playlist_id: str) -> Playlist:
-        # Resolve title by re-searching — cheaper than fetching the playlist page
+        # nuvem_de_som has no set/playlist-resolve endpoint, so a real title,
+        # artwork or owner cannot be fetched for an arbitrary set URL. A
+        # slug-derived stub is still returned (like get_track()/get_artist()'s
+        # fallback) so a playlist already surfaced by search() stays openable;
+        # get_playlist_tracks() resolves the real track listing independently.
+        # A URI that isn't even a SoundCloud set URL can't be stubbed at all.
+        if "/sets/" not in prov_playlist_id:
+            raise MediaNotFoundError(f"No playlist available for: {prov_playlist_id}")
+        slug = prov_playlist_id.rstrip("/").split("/")[-1].replace("-", " ").title()
         return Playlist(
             item_id=prov_playlist_id,
             provider=self.domain,
-            name=prov_playlist_id.rstrip("/").split("/")[-1].replace("-", " ").title(),
+            name=slug,
             owner="SoundCloud",
             is_editable=False,
             provider_mappings={
