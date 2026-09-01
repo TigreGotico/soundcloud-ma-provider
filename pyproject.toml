@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,9 @@ name = "soundcloud-ma-provider"
 version = "0.1.0"
 description = "SoundCloud provider for Music Assistant via nuvem_de_som"
 requires-python = ">=3.11"
-dependencies = ["music-assistant-plugin-manager", "nuvem_de_som"]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+dependencies = ["music-assistant-plugin-manager", "music-assistant-models>=1.1.206", "nuvem_de_som"]
 
 [project.entry-points."music_assistant.provider"]
 soundcloud_free = "soundcloud_ma_provider"
@@ -17,3 +19,7 @@ include = ["soundcloud_ma_provider*"]
 
 [tool.setuptools.package-data]
 soundcloud_ma_provider = ["manifest.json"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
